@@ -14,7 +14,7 @@ En este proyecto se hará uso de una regresión poisson bayesiana para clasifica
 | :-------------: | :-------------------------------: | :----: | :------------------------------------: |
 | Alejandro Muñoz |       alex.monfis@gmail.com       | 203021 |  [@Monfiz](https://github.com/Monfiz)  |
 | Rodrigo Juárez  | rodrigo.juarezjaramillo@gmail.com | 145804 | [@ro-juja](https://github.com/ro-juja) |
-|   Adrián Tame   |                                   |        |               @AdrianTJ                |
+|   Adrián Tame   | adrian.tame.jacobo@gmail.com      | 142235 | [@AdrianTJ](https://github.com/AdrianTJ) |
 
 ### Datos:
 
