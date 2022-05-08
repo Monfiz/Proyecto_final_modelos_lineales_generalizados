@@ -1,0 +1,162 @@
+---
+title: "EDA_strokes"
+author: "Alejandro Muñoz"
+date: "25/4/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# EDA de la base de datos 
+
+```{r, include=FALSE}
+library(tidyr)
+library(naniar) #Exploracion de NAs
+library(dplyr) #manipulación de datos
+library(PerformanceAnalytics)#visualizacion correlaciones
+library(ggplot2)#plotear
+library(hrbrthemes)#gira labels al plotear
+library(ggpubr)#combinar plots
+```
+
+
+# EDA data set derrames cerebrales
+
+Lectura de
+```{r}
+strokes <- read.csv("./Datos/healthcare-dataset-stroke-data.csv")  
+
+print(nrow(strokes))
+
+#busco Nas
+vis_miss(strokes, warn_large_data = F, show_perc_col = T, sort_miss = T)#visualizacion NAs
+```
+```{r}
+str(strokes)
+
+strokes$bmi <- as.numeric(as.character(strokes$bmi))
+
+
+chart.Correlation(select(strokes, age, hypertension, heart_disease, avg_glucose_level,  stroke, bmi), histogram = TRUE, method = "pearson")
+
+colnames(strokes)
+
+
+```
+
+```{r}
+
+#busco Nas
+vis_miss(strokes, warn_large_data = F, show_perc_col = T, sort_miss = T)#visualizacion NAs
+```
+```{r}
+# Helper functions
+make_NA <- function(x){ifelse(x == "N/A", NA, x)}
+work_type_fix <- function(x){
+  
+  x = ifelse(x == "children", 1, x)
+  x = ifelse(x == "Govt_job", 2, x)
+  x = ifelse(x == "Never_worked", 3, x)
+  x = ifelse(x == "Private", 4, x)
+  x = ifelse(x == "Self-employed", 5, x)
+    
+  x
+}
+smoking_status_fix <- function(x){
+  
+  x = ifelse(x == "never smoked", 1, x)
+  x = ifelse(x == "formerly smoked", 2, x)
+  x = ifelse(x == "smokes", 3, x)
+  x = ifelse(x == "Unknown", 4, x)
+    
+  x
+}
+
+
+
+# Cleaning
+df1 <- read.csv("./Datos/healthcare-dataset-stroke-data.csv")  
+
+df <- df1 %>% 
+      select(-id) %>% 
+      filter(gender != "Other") %>% 
+      
+      # Consistent capitalization among features
+      rename(Stroke = stroke) %>%
+      rename(Gender = gender) %>%
+      rename(Hypertension = hypertension) %>%
+      rename(Heart_disease = heart_disease) %>%
+      rename(Ever_married = ever_married) %>%
+      rename(Work_type = work_type) %>%
+      rename(Smoking_status = smoking_status) %>%
+      rename(Age = age) %>%
+      rename(Avg_glucose_level = avg_glucose_level) %>%
+      rename(BMI = bmi) %>%
+      
+      # Factorize categorical vars with labels
+      mutate(Stroke = factor(Stroke,
+                             levels = c(0,1),
+                             labels = c("No", "Yes"))) %>%
+      mutate(Gender = ifelse(Gender == "Female", 0, 1)) %>%
+      mutate(Gender = factor(Gender,
+                             levels = c(0,1),
+                             labels = c("Female", "Male"))) %>%
+      mutate(Hypertension = factor(Hypertension,
+                                   levels = c(0,1),
+                                   labels = c("No", "Yes"))) %>%
+      mutate(Heart_disease = factor(Heart_disease,
+                                    levels = c(0,1),
+                                    labels = c("No", "Yes"))) %>%
+      mutate(Ever_married = ifelse(Ever_married == "No", 0, 1)) %>%
+      mutate(Ever_married = factor(Ever_married,
+                                   levels = c(0,1),
+                                   labels = c("No", "Yes"))) %>%
+      mutate(Work_type = work_type_fix(Work_type)) %>%
+      mutate(Work_type = factor(Work_type,
+                                levels = c(1,2,3,4,5),
+                                labels = c("Children",
+                                           "Government",
+                                           "Never Worked",
+                                           "Private",
+                                           "Self-employed"))) %>%
+      mutate(Residence_type = ifelse(Residence_type == "Rural", 0, 1)) %>%
+      mutate(Residence_type = factor(Residence_type,
+                                     levels = c(0,1),
+                                     labels = c("Rural", "Urban"))) %>%
+      mutate(Smoking_status = smoking_status_fix(Smoking_status)) %>%
+      mutate(Smoking_status = factor(Smoking_status,
+                                     levels = c(1,2,3,4),
+                                     labels = c("Never Smoked",
+                                                "Former Smoker",
+                                                "Smokes",
+                                                "Unknown"))) %>%
+      mutate(BMI =  make_NA(BMI)) %>%
+      mutate(BMI = as.numeric(BMI)) 
+
+```
+
+
+```{r}
+# Categorical feature table
+
+
+strokes_categorical <- strokes %>% select(c(gender,
+                                              Hypertension,
+                                              Heart_disease,
+                                              Ever_married,
+                                              Work_type,
+                                              Residence_type,
+                                              Smoking_status))
+
+datasummary_skim(data = strokes_categorical %>%
+                        rename(`Heart Disease` = Heart_disease) %>%
+                        rename(`Ever Married` = Ever_married) %>%
+                        rename(`Work Type` = Work_type) %>%
+                        rename(`Residence Type` = Residence_type) %>%
+                        rename(`Smoking Status` = Smoking_status),
+                 type = "categorical") %>%
+                 kable_classic()
+```
+
