@@ -1,15 +1,15 @@
 ---
 title: "Ejercicio 7"
-author: "Adrian Tame"
+author: "Adrian Tame, Alejandro Muñoz y Rodrigo Juárez"
 date: "08/05/2022"
 output: html_document
 ---
+
 
 ```{r}
 library(bayesm)
 library(R2OpenBUGS)
 library(R2jags)
-
 #--- Funciones utiles ---
 prob<-function(x){
   out<-min(length(x[x>0])/length(x),length(x[x<0])/length(x))
@@ -32,13 +32,11 @@ abline(h=1,col=2)
 #-Defining data-
 data<-list("n"=n,"y"=leucemia$Obs,"ne"=leucemia$Pops/10000)
 data2<-list("n"=n,"y"=leucemia$Obs,"ne"=leucemia$Pops/10000,"C"=leucemia$Cancer,"P"=leucemia$Place,"A"=leucemia$Age)
-
 #-Defining inits-
 initsa<-function(){list(theta=1,yf1=rep(1,n))}
 initsb<-function(){list(theta=rep(1,n),yf1=rep(1,n))}
 initsc<-function(){list(theta=rep(1,n),a=1,b=1,yf1=rep(1,n))}
 initsd<-function(){list(alpha=0,beta=rep(0,2),gama=rep(0,2),delta=rep(0,2),yf1=rep(1,n))}
-
 #-Selecting parameters to monitor-
 parsa<-c("theta","yf1")
 parsc<-c("theta","eta","yf1")
@@ -61,7 +59,6 @@ ej7d.sim<-bugs(data2,initsd,parsd,model.file="Ej7d.txt",
 ```{r}
 #-Monitoring chain-
 ej7.sim<-ej7a.sim
-
 #OpenBUGS
 outa<-ej7a.sim$sims.list
 outb<-ej7b.sim$sims.list
@@ -104,7 +101,6 @@ outa.dic<-ej7a.sim$DIC
 outb.dic<-ej7b.sim$DIC
 outc.dic<-ej7c.sim$DIC
 outd.dic<-ej7d.sim$DIC
-
 print(outa.dic)
 print(outb.dic)
 print(outc.dic)
@@ -147,45 +143,110 @@ points(xmax,out.p[1],col=4,pch=16,cex=0.5)
 segments(xmax,out.p[3],xmax,out.p[7],col=4)
 ```
 
+JAGS:
+```{r}
+#-Running code-
+#JAGS
+ej7a.sim<-jags(data,initsa,parsa,model.file="Ej7a.txt",
+               n.iter=50000,n.chains=2,n.burnin=5000,n.thin=1)
+ej7b.sim<-jags(data,initsb,parsa,model.file="Ej7b.txt",
+               n.iter=50000,n.chains=2,n.burnin=5000,n.thin=1)
+ej7c.sim<-jags(data,initsc,parsc,model.file="Ej7c.txt",
+               n.iter=100000,n.chains=2,n.burnin=10000,n.thin=1)
+ej7d.sim<-jags(data2,initsd,parsd,model.file="Ej7d.txt",
+               n.iter=50000,n.chains=2,n.burnin=5000,n.thin=1)
+```
+
+Cadena
+```{r}
+#-Monitoring chain-
+ej7.sim<-ej7a.sim
+
+#Traza de la cadena
+traceplot(ej7.sim)
+
+#JAGS
+outa<-ej7a.sim$BUGSoutput$sims.list
+outb<-ej7b.sim$BUGSoutput$sims.list
+outc<-ej7c.sim$BUGSoutput$sims.list
+outc<-ej7d.sim$BUGSoutput$sims.list
+
+z<-outa$theta
+par(mfrow=c(2,2))
+plot(z,type="l")
+plot(cumsum(z)/(1:length(z)),type="l")
+hist(z,freq=FALSE)
+acf(z)
+```
+
+Resumen de estimadores
+```{r}
+#JAGS
+outa.sum<-ej7a.sim$BUGSoutput$summary
+outb.sum<-ej7b.sim$BUGSoutput$summary
+outc.sum<-ej7c.sim$BUGSoutput$summary
+outd.sum<-ej7d.sim$BUGSoutput$summary
+
+#Tabla resumen
+out<-outb
+out.sum<-outb.sum
+out.sum.t<-out.sum[grep("theta",rownames(out.sum)),c(1,3,7)]
+out.sum.t<-cbind(out.sum.t,apply(out$theta,2,prob))
+dimnames(out.sum.t)[[2]][4]<-"prob"
+print(out.sum.t)
+```
 
 
+DIC:
+```{r}
+#DIC
+#JAGS
+outa.dic<-ej7a.sim$BUGSoutput$DIC
+outb.dic<-ej7b.sim$BUGSoutput$DIC
+outc.dic<-ej7c.sim$BUGSoutput$DIC
+outd.dic<-ej7d.sim$BUGSoutput$DIC
 
+print(outa.dic)
+print(outb.dic)
+print(outc.dic)
+print(outd.dic)
+```
 
+Estimaciones
+```{r}
+#Estimaciones
+outa.p<-outa.sum[grep("theta",rownames(outa.sum)),]
+outb.p<-outb.sum[grep("theta",rownames(outb.sum)),]
+outc.p<-outc.sum[grep("theta",rownames(outc.sum)),]
+outc.eta<-outc.sum[grep("^eta",rownames(outc.sum)),] #Mis avance's ^
 
+#x vs. y 
+xmin<-0
+xmax<-10
+ymin<-0
+ymax<-5
+par(mfrow=c(1,1))
+plot(leucemia$Obs/leucemia$Pops*10000,type="p",col="grey50",xlim=c(xmin,xmax),ylim=c(ymin,ymax))
+#
+out.p<-outb.p
+points(out.p[,1],col=2,pch=16,cex=0.5)
+segments(1:8,out.p[,3],1:8,out.p[,7],col=2)
+#
+out.p<-outc.p
+points((1:8)+0.2,out.p[,1],col=4,pch=16,cex=0.5)
+segments((1:8)+0.2,out.p[,3],(1:8)+0.2,out.p[,7],col=4)
+#
+points(xmax-0.2,sum(leucemia$Obs)/sum(leucemia$Pops)*10000)
+#
+out.p<-outa.p
+points(xmax-0.2,out.p[1],col=3,pch=16,cex=0.5)
+segments(xmax-0.2,out.p[3],xmax-0.2,out.p[7],col=3)
+#
+out.p<-outc.eta
+points(xmax,out.p[1],col=4,pch=16,cex=0.5)
+segments(xmax,out.p[3],xmax,out.p[7],col=4)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#Avance 2: Distribución vaga: varianza grande. Al hacer mi varianza de phi grande thetas muy dependientes, si varianza de phi pequeña, thetas menos dependientes (comparten menos información entre ellas).
+#Si quisiera suavizar más: aumento varianza de inicial de phi. Global se hace más grande cuando le das información previa a phi. Cuando comparto información (son dependientes), los intervalos son más chiquitos que los rojos. 
+```
 
