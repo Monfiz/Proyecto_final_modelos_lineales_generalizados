@@ -1,0 +1,12 @@
+model
+{
+#Likelihood
+for (i in 1:n) {
+	y[i] ~ dpois(mu[i])
+	mu[i]<-theta*ne[i]
+}
+#Priors 
+theta ~ dgamma(0.001,0.001)
+#Prediction 1
+for (i in 1:n) { yf1[i] ~ dpois(mu[i]) }
+}
