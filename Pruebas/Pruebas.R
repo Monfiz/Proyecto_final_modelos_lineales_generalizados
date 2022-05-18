@@ -6,6 +6,7 @@ library(rstanarm)
 library(tidybayes)
 library(broom.mixed)
 library(janitor)
+library(caret)
 
 # Load the Data
 datos <- read.csv("~/Documents/Repositories/Proyecto_final_modelos_lineales_generalizados/Datos/healthcare-dataset-stroke-data.csv")
@@ -45,19 +46,20 @@ strokes_groups$ID <- seq.int(nrow(strokes_groups))
 strokes2 <- datos2 %>%
   mutate(age = round(age)) |> 
   group_by(Residence_type, hypertension, gender, heart_disease, ever_married) %>%
-  mutate(group_id = cur_group_id())
+  mutate(group_id = cur_group_id()) |> 
+  mutate(y = stroke)
 
 ################################################################################
 
 # Modeling 
 
 climb_model <- stan_glmer(
-  stroke ~ age + bmi + avg_glucose_level +  (1 | group_id), 
+  y ~ age + bmi + avg_glucose_level +  (1 | group_id), 
   data = strokes2, family = binomial,
   prior_intercept = normal(0, 2.5, autoscale = TRUE),
   prior = normal(0, 2.5, autoscale = TRUE), 
   prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
-  chains = 1, iter = 500*2, seed = 84735
+  chains = 2, iter = 500*2, seed = 84735
 )
 
 # Confirm prior specifications
@@ -80,7 +82,59 @@ strokes2 %>%
             alpha = 0.1) + 
   labs(y = "probability of success")
 
+# 
+
+plot(climb_model, prob = 0.5, pars = "beta")
+
+# 
+
+plot(climb_model, plotfun = "areas", prob = 0.95,
+     pars = c("(Intercept)"))
+
+plot(climb_model, plotfun = "areas", prob = 0.95,
+     pars = c("beta"))
+
+# 
+
+pp_check(climb_model, plotfun = "error_binned")
+
+# 
+
+posterior_vs_prior(climb_model)
+
+# 
+
+pp_check(climb_model, seed = 123)
+
+#
+
+pp_check(climb_model, plotfun = "scatter_avg")
+
+# 
+
+pp_check(climb_model, plotfun = "bars", nreps = 500, prob = 0.5)
+
+# 
+
+pp_check(climb_model, plotfun = "ppc_scatter_avg_grouped", group = "group_id")
+
+# 
+
+plot(climb_model, regex_pars = "^[b]")
+
+# 
+
+classification_summary(data = strokes2, model = climb_model, cutoff = 0.2)
 
 
 
+
+
+#############
+
+predictions <- posterior_predict(climb_model, newdata = strokes2, type = "response")
+
+preds <- apply(predictions,2, mean)
+
+confusionMatrix(as.factor(strokes2$stroke), as.factor(ifelse(preds > 0.2, 1, 0)))
 
