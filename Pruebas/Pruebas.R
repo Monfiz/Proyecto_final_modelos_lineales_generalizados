@@ -55,7 +55,7 @@ strokes2 <- datos2 %>%
 
 climb_model <- stan_glmer(
   y ~ age + bmi + avg_glucose_level +  (1 | group_id), 
-  data = strokes2, family = binomial,
+  data = strokes2, family = binomial(link = "logit"),
   prior_intercept = normal(0, 2.5, autoscale = TRUE),
   prior = normal(0, 2.5, autoscale = TRUE), 
   prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
@@ -138,3 +138,33 @@ preds <- apply(predictions,2, mean)
 
 confusionMatrix(as.factor(strokes2$stroke), as.factor(ifelse(preds > 0.2, 1, 0)))
 
+
+climb_model2 <- stan_glmer(
+  y ~ age + bmi + avg_glucose_level +  (1 | group_id), 
+  data = strokes2, family = binomial(link = "cloglog"),
+  prior_intercept = normal(0, 2.5, autoscale = TRUE),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
+  chains = 2, iter = 500*2, seed = 84735
+)
+
+l1 <- loo(climb_model)
+l2 <- loo(climb_model2)
+
+loo_compare(l1, l2)
+
+
+
+
+
+
+
+
+climb_model2 <- stan_glmer(
+  stroke ~ age + bmi + avg_glucose_level + Residence_type, ever_married + hypertension + (1 | heart_disease), 
+  data = strokes2, family = binomial(link = "logit"),
+  prior_intercept = normal(0, 2.5, autoscale = TRUE),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
+  chains = 2, iter = 500*2, seed = 84735
+)

@@ -1,0 +1,281 @@
+---
+title: "Modeling Strokes"
+output: html_document
+date: '2022-05-22'
+---
+
+```{r}
+# Load packages
+library(bayesrules)
+library(tidyverse)
+library(bayesplot)
+library(rstanarm)
+library(tidybayes)
+library(broom.mixed)
+library(janitor)
+library(caret)
+library(modEvA)
+```
+
+Iniciamos cargando los datos. Los datos sin limpiar están en `datos`, y los ya limpios están en `datos2`. Los ya limpios les quitamos los datos que tienen NAs en BMI, y las variables categóricas las hacemos 0 o 1. 
+
+```{r}
+# Load the Data
+# datos <- read.csv("~/Documents/Repositories/Proyecto_final_modelos_lineales_generalizados/Datos/healthcare-dataset-stroke-data.csv")
+datos2 <- read.csv("~/Documents/Repositories/Proyecto_final_modelos_lineales_generalizados/Datos/Stroke_Data.csv")
+```
+
+Dividimos a la población en grupos dependiendiendo de los valores que tienen en las variables categóricas. Como tenemos 4 variables categóricas de las cuales dividimos, entonces en total tenemos 32 grupos, por las posibles combinaciones de estas variables. 
+
+```{r}
+# Tamaño por grupo, estos son los distintos grupos que formamos. 
+grupos <- datos2 %>% 
+  group_by(Residence_type, hypertension, gender, heart_disease, ever_married) %>% 
+  summarize(count = n())
+
+grupos
+```
+
+En el siguiente histograma, vemos que la gran mayoría de los grupos tienen pocos miembros, relativos al resto, pero que hay grupos con muchos de ellos, excediendo los 700 miembros. Esto tiene sentido, ya que esperaríamos que por ejemplo la incidencia de hipertensión en la población en general sea una variable con pocos individuos hipertensos y muchos que no lo son. 
+
+```{r}
+ggplot(grupos, aes(x=count)) + 
+  geom_histogram(bins=16)
+```
+
+```{r}
+# Calculamos la probabilidad de derrame por grupo
+group_stroke <- datos2 %>% 
+  group_by(Residence_type, hypertension, gender, heart_disease, ever_married) %>% 
+  summarize(stroke_prob = mean(stroke))
+
+group_stroke
+```
+
+En la siguiente gráfica, vemos la probabilidad de derrame por grupos. Vemos que la mayoría de los grupos tienen probabilidad de derrame baja, y hay una observación atípica en la cual se tiene probabildiad de derrame de 1.0. La razón de esto es que hay un grupo con una sola persona que sí sufrió un derrame. También está el caso opuesto, en el cual hay grupos que tenemos probabilidad de derrame de 0.0 por los pocos pacientes en esos grupos. 
+
+Independientemente de estos casos, tenemos que la probabilidad promedio es de alrededor de $4.25\%$ en la población en general, y podemos ver que la mayoría de las observacioens de los promedios de los grupos están alrededor de este valor o un poco más altos también. Al comparar la media poblacional contra la media en grupos, vemos que la media en grupos es mucho más alta, de alrededor del $14\%$. Esta disparidad nos indica inicialmente que *los grupos más grandes parecen ser los grupos en los que hay menos incidencia de derrame cerebral*. 
+
+```{r}
+ggplot(group_stroke, aes(x=stroke_prob)) + 
+  geom_histogram(bins=16) + 
+  geom_vline(xintercept = mean(datos2$stroke), linetype="dotted", 
+                color = "red", size=1.5) +
+  geom_vline(xintercept = mean(group_stroke$stroke_prob), linetype="dotted", 
+                color = "blue", size=1.5)
+```
+
+Unimos los dataframes pasados. 
+
+Vemos también que hay una correlación negativa entre la probabilidad de derrame en grupo y la cantidad de personas en ese grupo, dandonos otra indicación de quel os grupos chicos son los que tienden a tender incidencia de derrames más alta. 
+
+```{r}
+# Merge dataframes, so we have one with both
+strokes_groups <- merge(grupos, group_stroke)   
+
+cor(strokes_groups$count, strokes_groups$stroke_prob)
+```
+
+Podemos ver ahora la tasa total de derrames por grupo de edad. Vemos una relación bastante clara, en la cual vemos que hay una relación directa entre la edad del individuo y la posibilidad de derrame. 
+
+```{r}
+# Calculate the success rate by age and oxygen use
+data_by_age <- datos2 %>% 
+  mutate(age = round(age)) |> 
+  group_by(age) %>% 
+  summarize(success_rate = mean(stroke))
+
+# Plot this relationship
+ggplot(data_by_age, aes(x = age, y = success_rate)) + 
+  geom_point()
+```
+Creamos las IDs de grupo, y luego, se las pegamos al dataframe original, donde indicamos a que grupo pertenece cada observación. 
+
+```{r}
+# Creating IDs
+
+strokes_groups$ID <- seq.int(nrow(strokes_groups))
+
+strokes2 <- datos2 %>%
+  mutate(age = round(age)) |> 
+  group_by(Residence_type, hypertension, gender, heart_disease, ever_married) %>%
+  mutate(group_id = cur_group_id())
+```
+
+## Modelos
+
+```{r}
+# Modeling 
+
+stroke_model1 <- stan_glmer(
+  stroke ~ age + bmi + avg_glucose_level +  (1 | group_id), 
+  data = strokes2, family = binomial(link = "logit"),
+  prior_intercept = normal(0, 2.5, autoscale = TRUE),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
+  chains = 2, iter = 500*2, seed = 84735
+)
+```
+
+```{r}
+# Modeling 
+
+stroke_model2 <- stan_glmer(
+  stroke ~ age + bmi + avg_glucose_level +  (1 | group_id), 
+  data = strokes2, family = binomial(link = "cloglog"),
+  prior_intercept = normal(0, 2.5, autoscale = TRUE),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
+  chains = 2, iter = 500*2, seed = 84735
+)
+```
+
+```{r}
+# Modeling 
+
+stroke_model3 <- stan_glmer(
+  stroke ~ age + bmi + avg_glucose_level +  (1 | group_id), 
+  data = strokes2, family = binomial(link = "log"),
+  prior_intercept = normal(0, 2.5, autoscale = TRUE),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
+  chains = 2, iter = 500*2, seed = 84735
+)
+```
+
+```{r}
+# Modeling 
+
+stroke_model4 <- stan_glmer(
+  stroke ~ age + bmi + avg_glucose_level +  (1 | group_id), 
+  data = strokes2, family = binomial(link = "cauchit"),
+  prior_intercept = normal(0, 2.5, autoscale = TRUE),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
+  chains = 2, iter = 500*2, seed = 84735
+)
+```
+
+## Comparación numérica modelos
+
+```{r}
+# Confirm prior specifications
+prior_summary(stroke_model1)
+```
+
+Hacemos la comparación de los modelos con la función `loo`. 
+
+```{r}
+l1 <- loo(stroke_model1)
+l2 <- loo(stroke_model2)
+l3 <- loo(stroke_model3)
+l4 <- loo(stroke_model4)
+
+print(loo_compare(l1, l2, l3, l4), simplify = FALSE)
+```
+
+
+
+
+Parece ser que el modelo más exitoso es el modelo con la liga `logit`, por lo tanto, nos quedamos con ese para las viualizaciones y el análisis de soluciones y predicciones. 
+
+En la siguiente grárica, vemos la significancia de las variables que incluimos al modelos fuera de las de los grupos. Notamos que estas ya están estandarizadas y por lo tanto las podemos comparar sin mayor problema. Vemos que claramente edad tiene un efecto importante en la posibilidad de derrame, igual que el nuvel de glucosa en sangre promedio, pero vemos que la variable de índice de masa corporal (bmi) no parece tener un efecto significativo en nuestra regresión. 
+
+```{r}
+# 
+plot(stroke_model1, prob = 0.5, prob_outer= 0.95, pars = "beta", plotfun = "areas")
+```
+
+Lo la graficamos con el resto, pero vemos tambi;en que el intercepto general está muy fuera del rango del 0, y por lo tanto, podemos también concluir que es una variable significativa, y una regresión por el orígen no sería apropiada. 
+
+```{r}
+plot(stroke_model1, plotfun = "areas", prob = 0.95,
+     pars = c("(Intercept)"))
+```
+
+```{r}
+summary(stroke_model1)
+```
+
+En la siguiente gráfica, podemos comparar el comportameiento de las variables en el modelo, incluyendo las de todos los grupos, contra los valores de las previas de esas variables. Vemos que sí hay cambio en las variables. 
+
+```{r}
+posterior_vs_prior(stroke_model1)
+```
+
+En la siguiente gráfica, vemos que el modelo verdaderamente está siguiendo la distribuci'ón de los datos, comparado con lo que simulamos. 
+
+```{r}
+pp_check(stroke_model1, seed = 123)
+```
+
+
+
+```{r}
+pp_check(stroke_model1, plotfun = "scatter_avg")
+```
+
+```{r}
+pp_check(stroke_model1, plotfun = "ppc_scatter_avg_grouped", group = "group_id")
+```
+
+Hacemos un gráfico 
+
+```{r}
+plot(stroke_model1, prob = 0.5, prob_outer = 0.95, regex_pars = " group_id")
+```
+
+```{r}
+(trace <- plot(stroke_model1, "trace", pars = "(Intercept)"))
+trace
+```
+
+## Línea de regresión
+
+
+
+## Predicciones 
+
+```{r}
+predictions <- posterior_predict(stroke_model1, newdata = strokes2, type = "response")
+
+preds <- apply(predictions,2, mean)
+
+confusionMatrix(as.factor(strokes2$stroke), as.factor(ifelse(preds > 0.15, 1, 0)))
+```
+
+
+```{r}
+
+plotGLM(obs = strokes2$stroke, pred = stroke_model1$fitted.values)
+```
+CALCULATE BY HAND, NOT TOO BAD 
+
+
+```{r}
+preds <- apply(predictions,2, mean)
+strokes_preds <- cbind(strokes2, "prediction" = preds)
+
+results <- strokes_preds |> 
+  group_by(group_id) |> 
+  summarize(stroke_prob = mean(prediction), 
+            quantile05 = quantile(prediction, 0.05), 
+            quantile95 = quantile(prediction, 0.95))
+```
+
+```{r}
+ggplot(results, aes(x=group_id, y=stroke_prob)) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = quantile05, ymax = quantile95), width = 0.3) 
+```
+
+
+
+
+
+
+
+
+
+
+
