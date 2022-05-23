@@ -1,0 +1,153 @@
+---
+title: "Modelado Edades"
+output: html_document
+date: '2022-05-23'
+---
+
+```{r}
+# Load packages
+library(bayesrules)
+library(tidyverse)
+library(bayesplot)
+library(rstanarm)
+library(tidybayes)
+library(broom.mixed)
+library(janitor)
+library(caret)
+library(modEvA)
+```
+
+```{r}
+# Load the Data
+# datos <- read.csv("~/Documents/Repositories/Proyecto_final_modelos_lineales_generalizados/Datos/healthcare-dataset-stroke-data.csv")
+datos2 <- read.csv("~/Documents/Repositories/Proyecto_final_modelos_lineales_generalizados/Datos/Stroke_Data.csv")
+```
+
+```{r}
+strokes2 <- datos2 |> 
+  mutate(age = round(age)) |> 
+  mutate(
+    # Create categories
+    age_group = dplyr::case_when(
+      age <= 14            ~ "0-14",
+      age > 14 & age <= 44 ~ "15-44",
+      age > 44 & age <= 64 ~ "45-64",
+      age > 64             ~ "64-82"
+    ),
+    # Convert to factor
+    age_group = factor(
+      age_group,
+      level = c("0-14", "15-44","45-64", "64-82")
+    )
+  )
+```
+
+
+
+```{r}
+# Tamaño por grupo, estos son los distintos grupos que formamos. 
+grupos <- strokes2 %>% 
+  group_by(age_group) %>% 
+  summarize(count = n())
+
+grupos
+```
+
+```{r}
+# Modeling 
+
+stroke_model1 <- stan_glmer(
+  stroke ~ gender + hypertension + heart_disease + ever_married + Residence_type
+  + bmi + avg_glucose_level + smoking_status + (1 | age_group), 
+  data = strokes2, family = binomial(link = "logit"),
+  prior_intercept = normal(0, 2.5, autoscale = TRUE),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
+  chains = 2, iter = 500*2, seed = 84735
+)
+```
+
+```{r}
+# Confirm prior specifications
+prior_summary(stroke_model1)
+```
+
+```{r}
+l1 <- loo(stroke_model1)
+l1
+```
+
+```{r}
+plot(stroke_model1, prob = 0.5, prob_outer= 0.95, pars = "beta")
+```
+
+```{r}
+plot(stroke_model1, plotfun = "areas", prob = 0.95,
+     pars = c("(Intercept)"))
+```
+
+```{r}
+summary(stroke_model1)
+```
+
+```{r}
+posterior_vs_prior(stroke_model1)
+```
+
+```{r}
+pp_check(stroke_model1, seed = 123)
+```
+
+```{r}
+pp_check(stroke_model1, plotfun = "scatter_avg")
+```
+
+```{r}
+plot(stroke_model1, prob = 0.5, prob_outer = 0.95, regex_pars = " age_group")
+```
+
+```{r}
+(trace <- plot(stroke_model1, "trace", pars = "(Intercept)"))
+trace
+```
+
+```{r}
+predictions <- posterior_predict(stroke_model1, newdata = strokes2, type = "response")
+
+preds <- apply(predictions,2, mean)
+
+confusionMatrix(as.factor(strokes2$stroke), as.factor(ifelse(preds > 0.10, 1, 0)))
+```
+
+```{r}
+plotGLM(obs = strokes2$stroke, pred = stroke_model1$fitted.values)
+```
+
+```{r}
+preds <- apply(predictions,2, mean)
+strokes_preds <- cbind(strokes2, "prediction" = preds)
+
+results <- strokes_preds |> 
+  group_by(age_group) |> 
+  summarize(stroke_prob = mean(prediction), 
+            quantile05 = quantile(prediction, 0.05), 
+            quantile95 = quantile(prediction, 0.95))
+```
+
+```{r}
+ggplot(results, aes(x=age_group, y=stroke_prob)) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = quantile05, ymax = quantile95), width = 0.3) 
+```
+
+
+
+
+
+
+
+
+
+
+
+

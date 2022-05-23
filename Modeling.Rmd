@@ -166,14 +166,21 @@ prior_summary(stroke_model1)
 Hacemos la comparación de los modelos con la función `loo`. 
 
 ```{r}
+stroke_model1$waic <- waic(stroke_model1)
+stroke_model2$waic <- waic(stroke_model2)
+stroke_model3$waic <- waic(stroke_model3)
+stroke_model4$waic <- waic(stroke_model4)
+
 l1 <- loo(stroke_model1)
 l2 <- loo(stroke_model2)
 l3 <- loo(stroke_model3)
 l4 <- loo(stroke_model4)
 
-print(loo_compare(l1, l2, l3, l4), simplify = FALSE)
-```
+waics <- print(loo_compare(stroke_model1, stroke_model2, stroke_model3, stroke_model4,
+                  criterion = "waic"), simplify = FALSE)
 
+waics
+```
 
 
 
@@ -249,19 +256,7 @@ confusionMatrix(as.factor(strokes2$stroke), as.factor(ifelse(preds > 0.15, 1, 0)
 
 plotGLM(obs = strokes2$stroke, pred = stroke_model1$fitted.values)
 ```
-CALCULATE BY HAND, NOT TOO BAD 
 
-
-```{r}
-preds <- apply(predictions,2, mean)
-strokes_preds <- cbind(strokes2, "prediction" = preds)
-
-results <- strokes_preds |> 
-  group_by(group_id) |> 
-  summarize(stroke_prob = mean(prediction), 
-            quantile05 = quantile(prediction, 0.05), 
-            quantile95 = quantile(prediction, 0.95))
-```
 
 ```{r}
 ggplot(results, aes(x=group_id, y=stroke_prob)) + 
