@@ -63,7 +63,49 @@ stroke_model1 <- stan_glmer(
   prior_intercept = normal(0, 2.5, autoscale = TRUE),
   prior = normal(0, 2.5, autoscale = TRUE), 
   prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
-  chains = 2, iter = 500*2, seed = 84735
+  chains = 4, iter = 500*2, seed = 84735
+)
+```
+
+```{r}
+# Modeling 
+
+stroke_model2 <- stan_glmer(
+  stroke ~ gender + hypertension + heart_disease + ever_married + Residence_type
+  + bmi + avg_glucose_level + smoking_status + (1 | age_group), 
+  data = strokes2, family = binomial(link = "cloglog"),
+  prior_intercept = normal(0, 2.5, autoscale = TRUE),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
+  chains = 4, iter = 500*2, seed = 84735
+)
+```
+
+```{r}
+# Modeling 
+
+stroke_model3 <- stan_glmer(
+  stroke ~ gender + hypertension + heart_disease + ever_married + Residence_type
+  + bmi + avg_glucose_level + smoking_status + (1 | age_group), 
+  data = strokes2, family = binomial(link = "log"),
+  prior_intercept = normal(0, 2.5, autoscale = TRUE),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
+  chains = 4, iter = 500*2, seed = 84735
+)
+```
+
+```{r}
+# Modeling 
+
+stroke_model4 <- stan_glmer(
+  stroke ~ gender + hypertension + heart_disease + ever_married + Residence_type
+  + bmi + avg_glucose_level + smoking_status + (1 | age_group), 
+  data = strokes2, family = binomial(link = "cauchit"),
+  prior_intercept = normal(0, 2.5, autoscale = TRUE),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
+  chains = 4, iter = 500*2, seed = 84735
 )
 ```
 
@@ -72,10 +114,24 @@ stroke_model1 <- stan_glmer(
 prior_summary(stroke_model1)
 ```
 
+
 ```{r}
+stroke_model1$waic <- waic(stroke_model1)
+stroke_model2$waic <- waic(stroke_model2)
+stroke_model3$waic <- waic(stroke_model3)
+stroke_model4$waic <- waic(stroke_model4)
+
 l1 <- loo(stroke_model1)
-l1
+l2 <- loo(stroke_model2)
+l3 <- loo(stroke_model3)
+l4 <- loo(stroke_model4)
+
+waics <- print(loo_compare(stroke_model1, stroke_model2, stroke_model3, stroke_model4,
+                  criterion = "waic"), simplify = FALSE)
+
+waics
 ```
+
 
 ```{r}
 plot(stroke_model1, prob = 0.5, prob_outer= 0.95, pars = "beta")
@@ -108,7 +164,6 @@ plot(stroke_model1, prob = 0.5, prob_outer = 0.95, regex_pars = " age_group")
 
 ```{r}
 (trace <- plot(stroke_model1, "trace", pars = "(Intercept)"))
-trace
 ```
 
 ```{r}
@@ -141,12 +196,57 @@ ggplot(results, aes(x=age_group, y=stroke_prob)) +
 ```
 
 
+```{r}
+library(yardstick)
+
+results <- as.data.frame(cbind(as.factor(strokes2$stroke), as.factor(ifelse(preds > 0.10, 1, 0))))
+results$V1 <- as.factor(results$V1)
+results$V2 <- as.factor(results$V2)
+results$preds <- 1 - preds
+
+roc_curve(results, truth = V1, estimate = preds)
+```
+
+```{r}
+roc_curve(results, truth = V1, estimate = preds) |> 
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_path(aes(colour = .threshold), size = 1.2) +
+  geom_abline(colour = "gray") + 
+  coord_equal() +
+  xlab("Tasa de falsos positivos") + ylab("Sensibilidad")
+
+```
+
+```{r}
+pr_auc_tbl <- pr_curve(results, V1, preds)
+ggplot(pr_auc_tbl, 
+       aes(x = recall , y = precision)) +
+  geom_path(aes(colour = .threshold), size = 1.2) +
+  xlab("Exhaustividad (Sensibilidad)") + ylab("Precisión")
+```
 
 
+```{r}
+lift_tbl <- lift_curve(results, V1, preds)
+ggplot(lift_tbl, 
+       aes(x = .percent_tested , y = .lift)) +
+  geom_path(size = 1) +
+  xlab("% Clasificado positivo") + ylab("Lift")
+```
 
 
+```{r}
+predictions <- posterior_predict(stroke_model1, newdata = strokes2, type = "response")
 
+preds <- apply(predictions,2, mean)
 
+results <- as.data.frame(cbind(as.factor(strokes2$stroke), as.factor(ifelse(preds > 0.10, 1, 0))))
+results$V1 <- as.factor(results$V1)
+results$V2 <- as.factor(results$V2)
+results$preds <- 1 - preds
+
+roc_auc(results, truth = V1, estimate = preds)
+```
 
 
 

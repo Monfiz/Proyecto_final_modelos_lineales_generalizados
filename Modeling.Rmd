@@ -164,23 +164,7 @@ prior_summary(stroke_model1)
 ```
 
 Hacemos la comparación de los modelos con la función `loo`. 
-
-```{r}
-stroke_model1$waic <- waic(stroke_model1)
-stroke_model2$waic <- waic(stroke_model2)
-stroke_model3$waic <- waic(stroke_model3)
-stroke_model4$waic <- waic(stroke_model4)
-
-l1 <- loo(stroke_model1)
-l2 <- loo(stroke_model2)
-l3 <- loo(stroke_model3)
-l4 <- loo(stroke_model4)
-
-waics <- print(loo_compare(stroke_model1, stroke_model2, stroke_model3, stroke_model4,
-                  criterion = "waic"), simplify = FALSE)
-
-waics
-```
+y
 
 
 
